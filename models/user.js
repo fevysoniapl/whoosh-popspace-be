@@ -48,6 +48,14 @@ module.exports = (sequelize, DataTypes) => {
       tableName: 'users',
       underscored: true,
       updatedAt: false,
+      defaultScope: {
+        attributes: { exclude: ['passwordHash'] },
+      },
+      scopes: {
+        withPassword: {
+          attributes: { include: ['passwordHash'] },
+        },
+      },
     }
   );
 
