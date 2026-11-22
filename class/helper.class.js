@@ -1,4 +1,11 @@
 class Helper {
+  today() {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${month}-${day}`;
+  }
+
   getPagination(params) {
     const page = Math.max(1, parseInt(params.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(params.limit, 10) || 20));
@@ -16,7 +23,7 @@ class Helper {
   }
 
   validate(data, schema) {
-    const { error, value } = schema.validate(data, {
+    const { error, value } = schema.validate(data ?? {}, {
       abortEarly: false,
       stripUnknown: true,
       convert: true,

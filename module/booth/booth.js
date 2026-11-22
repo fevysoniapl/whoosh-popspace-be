@@ -3,17 +3,9 @@ import Joi from 'joi';
 import db from '../../models/index.js';
 import helper from '../../class/helper.class.js';
 import BaseModule from '../../class/base.module.js';
+import availability from '../../class/availability.class.js';
 
-const { Booth, BoothBlock, RentalApplication, Station } = db;
-
-const PENDING_STATUSES = ['DIAJUKAN', 'DALAM_PENINJAUAN', 'PERLU_REVISI'];
-
-function localToday() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
+const { Booth, Station } = db;
 
 class BoothModule extends BaseModule {
   async list(req) {
@@ -105,7 +97,7 @@ class BoothModule extends BaseModule {
         start_date: Joi.date().iso().raw().required(),
         end_date: Joi.date().iso().raw().min(Joi.ref('start_date')).required(),
       }).custom((value, helpers) => {
-        if (value.start_date < localToday()) {
+        if (value.start_date < helper.today()) {
           return helpers.message({
             custom: 'start_date tidak boleh tanggal lampau',
           });
@@ -124,24 +116,9 @@ class BoothModule extends BaseModule {
         return { status: false, code: 404, message: 'Booth tidak ditemukan' };
       }
 
-      const overlap = {
-        startDate: { [Op.lte]: end_date },
-        endDate: { [Op.gte]: start_date },
-      };
-
-      const [blocks, applications] = await Promise.all([
-        BoothBlock.findAll({
-          where: { boothId: id, ...overlap },
-          order: [['startDate', 'ASC']],
-        }),
-        RentalApplication.findAll({
-          where: {
-            boothId: id,
-            status: { [Op.in]: ['DISETUJUI', ...PENDING_STATUSES] },
-            ...overlap,
-          },
-          order: [['startDate', 'ASC']],
-        }),
+      const [{ blocks, approved }, pendingApplications] = await Promise.all([
+        availability.findConflicts(id, start_date, end_date),
+        availability.findPending(id, start_date, end_date),
       ]);
 
       const blocked = blocks.map((block) => ({
@@ -149,19 +126,15 @@ class BoothModule extends BaseModule {
         end_date: block.endDate,
         reason: block.reason,
       }));
-      const approved = applications
-        .filter((application) => application.status === 'DISETUJUI')
-        .map((application) => ({
-          start_date: application.startDate,
-          end_date: application.endDate,
-        }));
-      const pending = applications
-        .filter((application) => PENDING_STATUSES.includes(application.status))
-        .map((application) => ({
-          start_date: application.startDate,
-          end_date: application.endDate,
-          status: application.status,
-        }));
+      const approvedPeriods = approved.map((application) => ({
+        start_date: application.startDate,
+        end_date: application.endDate,
+      }));
+      const pending = pendingApplications.map((application) => ({
+        start_date: application.startDate,
+        end_date: application.endDate,
+        status: application.status,
+      }));
 
       return {
         status: true,
@@ -174,7 +147,7 @@ class BoothModule extends BaseModule {
           available:
             booth.isActive && blocked.length === 0 && approved.length === 0,
           blocked,
-          approved,
+          approved: approvedPeriods,
           pending,
         },
       };

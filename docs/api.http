@@ -1,0 +1,263 @@
+# Whoosh PopSpace API — REST Client (VS Code) / bisa diimpor ke Postman
+# Jalankan berurutan dari atas. Cookie (token & csrf_token) dikelola otomatis
+# oleh REST Client (pastikan setting "rest-client.rememberCookiesForSubsequentRequests": true).
+# Akun simulasi seeder: admin@popspace.demo / Admin123!  |  tenant@popspace.demo / User123!
+
+@host = http://localhost:5000
+
+### Health check
+GET {{host}}/health
+
+### 1. Ambil CSRF token (wajib sebelum request POST/PATCH pertama)
+# @name csrfReq
+GET {{host}}/api/auth/csrf
+
+@csrf = {{csrfReq.response.body.data.csrf_token}}
+
+### 2. Register user baru (opsional; langsung login)
+POST {{host}}/api/auth/register
+x-csrf-token: {{csrf}}
+Content-Type: application/json
+
+{
+  "name": "Budi Santoso",
+  "email": "budi@example.com",
+  "password": "Password123!",
+  "phone": "081234567890"
+}
+
+### 3. Login tenant simulasi
+POST {{host}}/api/auth/login
+x-csrf-token: {{csrf}}
+Content-Type: application/json
+
+{
+  "email": "tenant@popspace.demo",
+  "password": "User123!"
+}
+
+### 4. User sesi berjalan
+GET {{host}}/api/auth/me
+
+### 5. Daftar stasiun
+GET {{host}}/api/stations
+
+### 6. Katalog booth dengan filter
+GET {{host}}/api/booths?station_id=1&has_electricity=true&page=1&limit=10
+
+### 7. Detail booth
+GET {{host}}/api/booths/1
+
+### 8. Cek ketersediaan booth (tanggal wajib, tidak boleh lampau)
+GET {{host}}/api/booths/1/availability?start_date=2027-01-10&end_date=2027-01-15
+
+### 9. Buat pengajuan sewa (multipart + proposal PDF)
+# Ganti path file PDF sesuai mesin Anda.
+# @name createApp
+POST {{host}}/api/applications
+x-csrf-token: {{csrf}}
+Content-Type: multipart/form-data; boundary=WPSBoundary
+
+--WPSBoundary
+Content-Disposition: form-data; name="booth_id"
+
+1
+--WPSBoundary
+Content-Disposition: form-data; name="business_name"
+
+Kopi Nusantara
+--WPSBoundary
+Content-Disposition: form-data; name="business_category"
+
+F&B
+--WPSBoundary
+Content-Disposition: form-data; name="pic_name"
+
+Budi Santoso
+--WPSBoundary
+Content-Disposition: form-data; name="email"
+
+budi@example.com
+--WPSBoundary
+Content-Disposition: form-data; name="phone"
+
+081234567890
+--WPSBoundary
+Content-Disposition: form-data; name="start_date"
+
+2027-01-10
+--WPSBoundary
+Content-Disposition: form-data; name="end_date"
+
+2027-01-15
+--WPSBoundary
+Content-Disposition: form-data; name="description"
+
+Booth kopi specialty
+--WPSBoundary
+Content-Disposition: form-data; name="proposal"; filename="proposal.pdf"
+Content-Type: application/pdf
+
+< ./proposal.pdf
+--WPSBoundary--
+
+@appId = {{createApp.response.body.data.application.id}}
+
+### 10. Daftar pengajuan saya
+GET {{host}}/api/applications/my?status=DIAJUKAN&page=1&limit=10
+
+### 11. Detail pengajuan saya
+GET {{host}}/api/applications/my/{{appId}}
+
+### 12. Unduh proposal saya (binary PDF, hanya pemilik)
+GET {{host}}/api/applications/my/{{appId}}/proposal
+
+### 13. Logout tenant (cookie token & csrf dihapus)
+POST {{host}}/api/auth/logout
+x-csrf-token: {{csrf}}
+
+### 14. Ambil CSRF baru (wajib setelah logout)
+# @name csrfAdmin
+GET {{host}}/api/auth/csrf
+
+@csrfA = {{csrfAdmin.response.body.data.csrf_token}}
+
+### 15. Login admin
+POST {{host}}/api/auth/login
+x-csrf-token: {{csrfA}}
+Content-Type: application/json
+
+{
+  "email": "admin@popspace.demo",
+  "password": "Admin123!"
+}
+
+### 16. Dashboard admin
+GET {{host}}/api/admin/dashboard
+
+### 17. Daftar booth admin (termasuk nonaktif, dengan pencarian)
+GET {{host}}/api/admin/booths?search=halim&page=1&limit=10
+
+### 18. Tambah booth (multipart, image opsional)
+POST {{host}}/api/admin/booths
+x-csrf-token: {{csrfA}}
+Content-Type: multipart/form-data; boundary=WPSBoundary
+
+--WPSBoundary
+Content-Disposition: form-data; name="station_id"
+
+1
+--WPSBoundary
+Content-Disposition: form-data; name="code"
+
+HLM-B99
+--WPSBoundary
+Content-Disposition: form-data; name="name"
+
+Booth Uji Coba
+--WPSBoundary
+Content-Disposition: form-data; name="daily_rate"
+
+100000
+--WPSBoundary
+Content-Disposition: form-data; name="minimum_days"
+
+3
+--WPSBoundary
+Content-Disposition: form-data; name="has_electricity"
+
+true
+--WPSBoundary
+Content-Disposition: form-data; name="facilities"
+
+["Listrik 2200W","AC"]
+--WPSBoundary--
+
+### 19. Update booth (field saja; boleh juga hanya file image)
+PATCH {{host}}/api/admin/booths/1
+x-csrf-token: {{csrfA}}
+Content-Type: application/json
+
+{
+  "daily_rate": 175000,
+  "is_active": true
+}
+
+### 20. Blokir tanggal booth
+POST {{host}}/api/admin/booths/1/blocks
+x-csrf-token: {{csrfA}}
+Content-Type: application/json
+
+{
+  "start_date": "2027-02-01",
+  "end_date": "2027-02-03",
+  "reason": "Maintenance listrik"
+}
+
+### 21. Daftar semua pengajuan (filter status/stasiun/booth)
+GET {{host}}/api/admin/applications?status=DIAJUKAN&page=1&limit=10
+
+### 22. Detail pengajuan (admin, lengkap dengan riwayat status)
+GET {{host}}/api/admin/applications/{{appId}}
+
+### 23. Unduh proposal pengajuan (admin)
+GET {{host}}/api/admin/applications/{{appId}}/proposal
+
+### 24. Minta revisi (note wajib untuk PERLU_REVISI / DITOLAK)
+PATCH {{host}}/api/admin/applications/{{appId}}/status
+x-csrf-token: {{csrfA}}
+Content-Type: application/json
+
+{
+  "status": "PERLU_REVISI",
+  "note": "Proposal kurang jelas, mohon perbaiki bagian rencana operasional"
+}
+
+### 25. Setujui pengajuan (cek ulang konflik dalam transaksi)
+PATCH {{host}}/api/admin/applications/{{appId}}/status
+x-csrf-token: {{csrfA}}
+Content-Type: application/json
+
+{
+  "status": "DISETUJUI"
+}
+
+### 26. Tolak pengajuan (note wajib)
+PATCH {{host}}/api/admin/applications/{{appId}}/status
+x-csrf-token: {{csrfA}}
+Content-Type: application/json
+
+{
+  "status": "DITOLAK",
+  "note": "Kategori usaha tidak sesuai ketentuan stasiun"
+}
+
+### 27. Login tenant lagi lalu resubmit setelah revisi
+# Jalankan ulang request 14 (CSRF baru) & 3 (login tenant), lalu:
+# PATCH {{host}}/api/applications/my/{{appId}}/resubmit
+# x-csrf-token: <csrf terbaru>
+# Content-Type: multipart/form-data; boundary=WPSBoundary
+#
+# --WPSBoundary
+# Content-Disposition: form-data; name="business_name"
+#
+# Kopi Nusantara Jaya
+# --WPSBoundary
+# Content-Disposition: form-data; name="proposal"; filename="proposal-revisi.pdf"
+# Content-Type: application/pdf
+#
+# < ./proposal-revisi.pdf
+# --WPSBoundary--
+#
+# Boleh hanya field teks, hanya file proposal, atau keduanya.
+# Body kosong tanpa file -> 400 "Tidak ada perubahan yang dikirim".
+
+### 28. Contoh error: akses admin dengan role USER (403)
+GET {{host}}/api/admin/dashboard
+
+### 29. Contoh error: validasi (400)
+GET {{host}}/api/booths/1/availability?start_date=2020-01-01&end_date=2020-01-05
+
+### 30. Logout admin
+POST {{host}}/api/auth/logout
+x-csrf-token: {{csrfA}}
