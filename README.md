@@ -14,7 +14,7 @@ Backend Whoosh PopSpace merupakan layanan REST API untuk mendukung pengelolaan b
 
 ## Repository
 
-- **Frontend:** [whoosh-popspace-fe](https://github.com/USERNAME/whoosh-popspace-fe)
+- **Frontend:** [whoosh-popspace-fe](https://github.com/fevysoniapl/whoosh-popspace-fe)
 - **Backend:** Repository ini (`whoosh-popspace-be`)
 
 ## Getting Started
